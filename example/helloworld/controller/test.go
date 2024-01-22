@@ -10,7 +10,7 @@ import (
 
 var TestController = map[string]koa.Plugin{
 	"/test/benchmark": koa.PluginSingleArg(func(context *koa.Context) {
-		_ = context.Response.Write([]byte("APP NAME is " + context.Attr["config"].(config.Config).Name))
+		_ = context.Response.Write([]byte("APP NAME is " + context.Attr["config"].(config.Config).Server.Name))
 	}),
 	"/test/hello/world": koa.PluginSingleArg(func(context *koa.Context) {
 		_ = context.Response.Write([]byte("hello world"))

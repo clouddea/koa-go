@@ -7,7 +7,7 @@ import (
 )
 
 /** 读取yaml配置文件 */
-func NewConfig[T any](filename string, config T) koa.PluginMultiArg {
+func NewConfig[T any](filename string, config T) (koa.PluginMultiArg, *T) {
 	bytes, err := os.ReadFile(filename)
 	koa.Assert(err, "open config file error")
 	err = yaml.Unmarshal(bytes, &config)
@@ -15,5 +15,5 @@ func NewConfig[T any](filename string, config T) koa.PluginMultiArg {
 	return func(ctx *koa.Context, next func()) {
 		ctx.Attr["config"] = config
 		next()
-	}
+	}, &config
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	config "github.com/clouddea/koa-go/example/helloworld/config"
 	"github.com/clouddea/koa-go/example/helloworld/controller"
 	"github.com/clouddea/koa-go/example/helloworld/dao"
@@ -17,12 +18,13 @@ func main() {
 	maps.Copy(routers, controller.UserController)
 	router := plugin.NewRouter(routers)
 	logger := plugin.NewLogger(true)
-	configPlugin := plugin.NewConfig("./application.yaml", config.Config{})
-	dbPlugin, db := plugin.NewSqlite(app, "./data/store.db?_synchronous=0")
+	configPlugin, cfg := plugin.NewConfig("./application.yaml", config.Config{})
+	dbPlugin, db := plugin.NewSqlite(app, cfg.Database)
 	dao.DAOInit(db)
 	app.Use(configPlugin)
 	app.Use(dbPlugin)
 	app.Use(logger)
 	app.Use(router)
-	app.Listen(8080)
+	fmt.Printf("server %v has started on port %v \n", cfg.Server.Name, cfg.Server.Port)
+	app.Listen(cfg.Server.Port)
 }

@@ -1,5 +1,9 @@
 package config
 
 type Config struct {
-	Name string
+	Server struct {
+		Name string
+		Port int
+	}
+	Database string
 }
