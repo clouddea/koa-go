@@ -19,9 +19,25 @@ go build -o build/serve.exe github.com/clouddea/koa-go/example/serve
 ```
 
 # TODOs
++ [x] finish implementation of `Context` API
 + [ ] finish implementation of `Config` API
 + [ ] finish implementation of `Request` API
 + [ ] finish implementation of `Response` API
 + [ ] finish implementation of other APIs
+
+# Reference
+
+## benchmark
+77492.47 request/s in writing "hello world"
+```shell
+go install github.com/tsliwowicz/go-wrk@latest
+go-wrk -help
+go-wrk -c 128 -d 10 http://localhost:8080/test  # amd 7840h laptop
+```
+
+
+
+
+
 
 

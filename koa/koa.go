@@ -4,11 +4,15 @@ import (
 	eventbus "github.com/asaskevich/EventBus"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 )
 
 const (
-	KOA_EVENT_ERROR = "error"
+	KOA_EVENT_ERROR = "error" // 发生错误
+	KOA_EVENT_CLOSE = "close" // 应用关闭
 )
 
 type Koa struct {
@@ -29,6 +33,13 @@ func NewKoa(config *KoaConfig) *Koa {
 }
 
 func (this *Koa) Listen(port int) {
+	signals := make(chan os.Signal, 2)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-signals
+		this.Emit(KOA_EVENT_CLOSE)
+		os.Exit(0)
+	}()
 	http.HandleFunc("/", this.dispatcher)
 	endpoint := "0.0.0.0:" + strconv.Itoa(port)
 	err := http.ListenAndServe(endpoint, nil)
@@ -60,6 +71,7 @@ func (this *Koa) dispatcher(writer http.ResponseWriter, req *http.Request) {
 		hasSentHeader: false,
 	}
 	context := &Context{
+		Attr:     make(map[string]any),
 		app:      this,
 		Req:      req,
 		Res:      writer,

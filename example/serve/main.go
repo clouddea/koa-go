@@ -34,10 +34,10 @@ func main() {
 		dir = v
 	}
 
-	router := plugin.NewRouter(map[string]func(context *koa.Context){
+	router := plugin.NewRouter(map[string]koa.Plugin{
 		"/": plugin.NewStatic("/", dir),
 	})
-	logger := plugin.NewLogger()
+	logger := plugin.NewLogger(true)
 	app := koa.NewKoa(nil)
 	app.Use(logger)
 	app.Use(router)

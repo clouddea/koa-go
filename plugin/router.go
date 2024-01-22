@@ -7,7 +7,7 @@ import (
 )
 
 /** 最简路由实现 */
-func NewRouter(mapping map[string]func(context *koa.Context)) koa.PluginMultiArg {
+func NewRouter(mapping map[string]koa.Plugin) koa.PluginMultiArg {
 	return func(context *koa.Context, next func()) {
 		items := strings.Split(context.Req.URL.Path, "/")
 		var candidates []string
@@ -23,8 +23,12 @@ func NewRouter(mapping map[string]func(context *koa.Context)) koa.PluginMultiArg
 		// 从后往前，最长匹配
 		for i := len(candidates) - 1; i >= 0; i-- {
 			if v, ok := mapping[candidates[i]]; ok {
-				v(context)
-				next()
+				switch v.(type) {
+				case koa.PluginSingleArg:
+					v.(koa.PluginSingleArg)(context)
+				case koa.PluginMultiArg:
+					v.(koa.PluginMultiArg)(context, next)
+				}
 				return
 			}
 		}
