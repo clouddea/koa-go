@@ -44,7 +44,7 @@ func NewAuth(
 			}
 			return false
 		}
-		ctx.Attr["auth"] = auth
+		ctx.State["auth"] = auth
 		next()
 	}
 }

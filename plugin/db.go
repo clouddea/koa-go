@@ -16,7 +16,7 @@ func NewSqlite(app *koa.Koa, filename string) (koa.PluginMultiArg, *sql.DB) {
 		fmt.Println("sqlite3 closed")
 	})
 	return func(ctx *koa.Context, next func()) {
-		ctx.Attr["sqlite3"] = sqlite3
+		ctx.State["sqlite3"] = sqlite3
 		next()
 	}, sqlite3
 }

@@ -3,6 +3,9 @@ server:
   port: 8080
   name: "Super Bookmark"
 database: "./data/store.db?_synchronous=0"
+jsonMaxSize: 1048576
+
+
 
 
 

@@ -9,9 +9,8 @@ type Context struct {
 	Res      http.ResponseWriter
 	Request  *KoaRequest
 	Response *KoaResponse
-	cookies  any // TODO: 实现
-	State    any // 传递给前端的值
-	Attr     map[string]any
+	Cookies  *koaCookies
+	State    map[string]any
 }
 
 func (this *Context) Throw(code int) {

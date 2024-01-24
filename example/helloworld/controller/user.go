@@ -9,15 +9,25 @@ import (
 )
 
 func User_Register_Controller(ctx *koa.Context) {
-	db := ctx.Attr["sqlite3"].(*sql.DB)
-	service.User_Register_Service(db, dao.User{
-		Nickname: "test",
-	})
+	if input, ok := ctx.Request.Body.(map[string]any); ok {
+		if _, ok := input["name"]; !ok {
+			ctx.Response.Body = dao.ResponseError("请输入用户名")
+			return
+		}
+		name := input["name"].(string)
+		db := ctx.State["sqlite3"].(*sql.DB)
+		service.User_Register_Service(db, dao.User{
+			Nickname: name,
+		})
+		ctx.Response.Body = dao.ResponseSuccess()
+	} else {
+		ctx.Response.Body = dao.ResponseError("请输入数据")
+	}
 }
 
 func User_Update_Controller(ctx *koa.Context) {
-	db := ctx.Attr["sqlite3"].(*sql.DB)
-	auth := ctx.Attr["auth"].(plugin.Auth)
+	db := ctx.State["sqlite3"].(*sql.DB)
+	auth := ctx.State["auth"].(plugin.Auth)
 	if user, ok := dao.User_Query(db, 1); ok {
 		if auth(user, nil) {
 			service.User_Update_Service(db, dao.User{

@@ -65,25 +65,38 @@ func (this *Koa) Emit(event string, args ...any) {
 }
 
 func (this *Koa) dispatcher(writer http.ResponseWriter, req *http.Request) {
-	request := &KoaRequest{}
+	cookies := &koaCookies{}
+	request := &KoaRequest{
+		Body: req.Body,
+	}
 	response := &KoaResponse{
 		status:        http.StatusOK,
 		hasSentHeader: false,
 	}
 	context := &Context{
-		Attr:     make(map[string]any),
+		Cookies:  cookies,
+		State:    make(map[string]any),
 		app:      this,
 		Req:      req,
 		Res:      writer,
 		Request:  request,
 		Response: response,
 	}
+	cookies.context = context
 	response.context = context
 	this.dispatcher_dfs(context, 0)
 	// write response
 	if !response.hasSentHeader {
 		response.hasSentHeader = true
 		writer.WriteHeader(response.status)
+		// write body
+		if response.Body != nil {
+			if body, ok := response.Body.([]byte); ok {
+				_ = response.Write(body)
+			} else {
+
+			}
+		}
 	}
 }
 
@@ -117,32 +130,14 @@ func NewKoaConfig() *KoaConfig {
 	return &KoaConfig{}
 }
 
-type KoaRequest struct {
+type koaCookies struct {
+	context *Context
 }
 
-type KoaResponse struct {
-	context       *Context
-	hasSentHeader bool
-	status        int
+func (this *koaCookies) Set(cookie *http.Cookie) {
+	this.context.Req.AddCookie(cookie)
 }
 
-func (this *KoaResponse) SetStatus(status int) {
-	this.status = status
-}
-
-func (this *KoaResponse) GetStatus() int {
-	return this.status
-}
-
-func (this *KoaResponse) Write(bytes []byte) error {
-	if !this.hasSentHeader {
-		this.hasSentHeader = true
-		this.context.Res.WriteHeader(this.status)
-	}
-	_, err := this.context.Res.Write(bytes)
-	return err
-}
-
-func (this *KoaResponse) Header() http.Header {
-	return this.context.Res.Header()
+func (this *koaCookies) Get(name string) (*http.Cookie, error) {
+	return this.context.Req.Cookie(name)
 }

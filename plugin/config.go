@@ -13,7 +13,7 @@ func NewConfig[T any](filename string, config T) (koa.PluginMultiArg, *T) {
 	err = yaml.Unmarshal(bytes, &config)
 	koa.Assert(err, "read yaml file error")
 	return func(ctx *koa.Context, next func()) {
-		ctx.Attr["config"] = config
+		ctx.State["config"] = config
 		next()
 	}, &config
 }

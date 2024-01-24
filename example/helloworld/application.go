@@ -24,6 +24,7 @@ func main() {
 	dao.DAOInit(db)
 	app.Use(configPlugin)
 	app.Use(dbPlugin)
+	app.Use(plugin.NewJsonParser(cfg.JsonMaxSize))
 	app.Use(auth)
 	app.Use(logger)
 	app.Use(router)

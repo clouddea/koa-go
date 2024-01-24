@@ -5,5 +5,6 @@ type Config struct {
 		Name string
 		Port int
 	}
-	Database string
+	Database    string
+	JsonMaxSize int `yaml:"jsonMaxSize"`
 }
