@@ -56,6 +56,8 @@ func DAOInit(db *sql.DB) {
 	koa.Assert(tx.Commit(), "init dao error: can not commit transaction ")
 	// 初始化各个表
 	ensureTalbe(db, TABLE_TEST, TABLE_TEST_VERSION, TABLE_TEST_CREATE_SQL)
+	ensureTalbe(db, TABLE_USER, TABLE_USER_VERSION, TABLE_USER_CREATE_SQL)
+	ensureTalbe(db, TABLE_URL, TABLE_URL_VERSION, TABLE_URL_CREATE_SQL)
 }
 
 func ensureTalbe(db *sql.DB, name string, version int, sql string) {

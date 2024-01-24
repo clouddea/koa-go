@@ -11,6 +11,7 @@ func NewLogger(debug bool) koa.PluginMultiArg {
 		defer func() {
 			err := recover()
 			if err != nil {
+				context.Throw(500)
 				log.Printf("[ERROR] %v", err)
 			}
 		}()
