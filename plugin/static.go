@@ -30,6 +30,7 @@ var homePageName = "index.html"
 
 // prefix : path prefix
 // dir: directory in host
+// TODO: 增加缓存选项
 func NewStatic(prefix string, dir string) koa.PluginSingleArg {
 	return func(ctx *koa.Context) {
 		// 判断路径是否正确
