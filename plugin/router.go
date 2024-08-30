@@ -26,6 +26,8 @@ func NewRouter(mapping map[string]koa.Plugin) koa.PluginMultiArg {
 				switch v.(type) {
 				case koa.PluginSingleArg:
 					v.(koa.PluginSingleArg)(context)
+					// 如果是只有一个参数的，则也会调用后面的插件
+					next()
 				case koa.PluginMultiArg:
 					v.(koa.PluginMultiArg)(context, next)
 				}
