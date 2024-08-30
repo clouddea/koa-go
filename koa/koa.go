@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	KOA_EVENT_START = "start" // 启动完毕
 	KOA_EVENT_ERROR = "error" // 发生错误
 	KOA_EVENT_CLOSE = "close" // 应用关闭
 )
@@ -42,7 +43,9 @@ func (this *Koa) Listen(port int) {
 	}()
 	http.HandleFunc("/", this.dispatcher)
 	endpoint := "0.0.0.0:" + strconv.Itoa(port)
+	this.Emit(KOA_EVENT_START)
 	err := http.ListenAndServe(endpoint, nil)
+
 	if err != nil {
 		this.Emit(KOA_EVENT_ERROR, err)
 		log.Fatalln("listen on "+endpoint+" error", err)

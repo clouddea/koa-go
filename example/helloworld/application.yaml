@@ -2,7 +2,7 @@
 server:
   port: 8080
   name: "Super Bookmark"
-database: "./data/store.db?_synchronous=0"
+database: "file:./store.db?mode=rwc"
 jsonMaxSize: 1048576
 
 
