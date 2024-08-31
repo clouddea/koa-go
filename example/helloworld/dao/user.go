@@ -2,7 +2,7 @@ package dao
 
 import (
 	"database/sql"
-	"github.com/clouddea/koa-go/koa"
+	"github.com/clouddea/koa-go/koa/util"
 )
 
 const TABLE_USER = "user"
@@ -28,7 +28,7 @@ func User_Create(db *sql.DB, user User) int64 {
 		    role
 		) values (?, ?, ?, ?, ?)
 	`, user.Nickname, user.Wechat, user.Email, user.Visa, user.Role)
-	koa.Assert(err, "create user error")
+	util.Assert(err, "create user error")
 	insertedId, _ := result.LastInsertId()
 	return insertedId
 }
@@ -45,7 +45,7 @@ func User_Update(db *sql.DB, user User) {
 		where
 		    id = ?
 	`, user.Nickname, user.Wechat, user.Email, user.Visa, user.Role, user.Id)
-	koa.Assert(err, "update user error")
+	util.Assert(err, "update user error")
 }
 
 func User_Query(db *sql.DB, userId int64) (User, bool) {
@@ -62,6 +62,6 @@ func User_Query(db *sql.DB, userId int64) (User, bool) {
 	}
 	user := User{}
 	err = rows.Scan(&user.Id, &user.Nickname, &user.Wechat, &user.Email, &user.Visa, &user.Role)
-	koa.Assert(err, "read user info error")
+	util.Assert(err, "read user info error")
 	return user, true
 }

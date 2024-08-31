@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/clouddea/koa-go/koa"
+	"github.com/clouddea/koa-go/koa/util"
 	"github.com/clouddea/koa-go/plugin"
 	"os"
 	"strconv"
@@ -27,7 +28,7 @@ func main() {
 	port := 8080
 	if v, ok := args["--port"]; ok && v != "" {
 		_port, err := strconv.Atoi(v)
-		koa.Assert(err, "port "+v+"is invalid")
+		util.Assert(err, "port "+v+"is invalid")
 		port = _port
 	}
 	if v, ok := args["--dir"]; ok && v != "" {

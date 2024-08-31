@@ -4,12 +4,13 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/clouddea/koa-go/koa"
+	"github.com/clouddea/koa-go/koa/util"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 func NewSqlite(app *koa.Koa, filename string) (koa.PluginMultiArg, *sql.DB) {
 	sqlite3, err := sql.Open("sqlite3", filename)
-	koa.Assert(err, "open sqlite3 error")
+	util.Assert(err, "open sqlite3 error")
 	fmt.Println("sqlite3 opened")
 	app.On(koa.KOA_EVENT_CLOSE, func(arg ...any) {
 		_ = sqlite3.Close()

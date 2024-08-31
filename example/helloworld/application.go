@@ -27,6 +27,7 @@ func main() {
 	app.Use(plugin.NewJsonParser(cfg.JsonMaxSize))
 	app.Use(auth)
 	app.Use(logger)
+	app.Use(plugin.NewProxy(config.Proxys))
 	app.Use(router)
 	fmt.Printf("server %v has started on port %v \n", cfg.Server.Name, cfg.Server.Port)
 	app.Listen(cfg.Server.Port)

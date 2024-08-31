@@ -1,4 +1,4 @@
-package koa
+package util
 
 import "fmt"
 

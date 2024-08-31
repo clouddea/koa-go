@@ -3,6 +3,7 @@ package plugin
 import (
 	"encoding/json"
 	"github.com/clouddea/koa-go/koa"
+	"github.com/clouddea/koa-go/koa/util"
 	"io"
 	"net/http"
 	"strconv"
@@ -50,7 +51,7 @@ func NewJsonParser(maxLenBytes int) koa.PluginMultiArg {
 		if context.Response.Body != nil {
 			if _, ok := context.Response.Body.([]byte); !ok {
 				bytes, err := json.Marshal(context.Response.Body)
-				koa.Assert(err, "can not parse obj to json")
+				util.Assert(err, "can not parse obj to json")
 				context.Response.Header().Add("Content-Length", strconv.Itoa(len(bytes)))
 				context.Response.Body = bytes
 			}

@@ -3,6 +3,7 @@ package plugin
 import (
 	"fmt"
 	"github.com/clouddea/koa-go/koa"
+	"github.com/clouddea/koa-go/koa/util"
 	"github.com/gabriel-vasile/mimetype"
 	"io"
 	"net/http"
@@ -50,7 +51,7 @@ func NewStatic(prefix string, dir string) koa.PluginSingleArg {
 			return
 		}
 		file, err := os.Open(filepath)
-		koa.Assert(err, "open file error"+filepath)
+		util.Assert(err, "open file error"+filepath)
 		defer file.Close()
 		// 文件简单名
 		_, filename := path.Split(filepath)
@@ -92,7 +93,7 @@ func NewStatic(prefix string, dir string) koa.PluginSingleArg {
 						supportRange = false
 					}
 				} else {
-					koa.Assert(err, "stat file error")
+					util.Assert(err, "stat file error")
 					end = stat.Size() - 1
 				}
 			}
@@ -106,8 +107,8 @@ func NewStatic(prefix string, dir string) koa.PluginSingleArg {
 			ctx.Response.Header().Add("Content-Disposition", "attachment;filename="+url.QueryEscape(filename))
 		}
 		if !supportRange {
-			koa.Assert(readFile(file, func(bytes []byte) {
-				koa.Assert(ctx.Response.Write(bytes), "write to client error")
+			util.Assert(readFile(file, func(bytes []byte) {
+				util.Assert(ctx.Response.Write(bytes), "write to client error")
 			}), "read file error")
 
 		} else {
@@ -120,8 +121,8 @@ func NewStatic(prefix string, dir string) koa.PluginSingleArg {
 			ctx.Response.Header().Add("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, stat.Size()))
 			ctx.Response.Header().Add("Content-Length", fmt.Sprintf("%d", end-start+1))
 			ctx.Response.SetStatus(http.StatusPartialContent)
-			koa.Assert(readFileRange(file, start, end, func(bytes []byte) {
-				koa.Assert(ctx.Response.Write(bytes), "write partial to client error")
+			util.Assert(readFileRange(file, start, end, func(bytes []byte) {
+				util.Assert(ctx.Response.Write(bytes), "write partial to client error")
 			}), "read partial file error")
 		}
 	}
@@ -152,12 +153,12 @@ func readFileRange(file *os.File, start int64, end int64, callback func([]byte))
 	var bufSize int64 = 1024
 	buffer := make([]byte, bufSize)
 	_, err := file.Seek(start, 0)
-	koa.Assert(err, "seek partial file error")
+	util.Assert(err, "seek partial file error")
 	// 循环读取文件内容
 	for start <= end {
 		// 从文件中读取内容到缓冲区
 		_, err := file.Read(buffer)
-		koa.Assert(err, "read partial file error")
+		util.Assert(err, "read partial file error")
 		remains := end - start + 1
 		if remains >= bufSize {
 			remains = bufSize
@@ -174,6 +175,6 @@ func readFileMIME(filepath string) string {
 		return "text/css"
 	}
 	mtype, err := mimetype.DetectFile(filepath)
-	koa.Assert(err, "delete file mime type error")
+	util.Assert(err, "delete file mime type error")
 	return mtype.String()
 }
