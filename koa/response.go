@@ -29,3 +29,7 @@ func (this *KoaResponse) Write(bytes []byte) error {
 func (this *KoaResponse) Header() http.Header {
 	return this.context.Res.Header()
 }
+
+func (this *KoaResponse) HasSentHeader() bool {
+	return this.hasSentHeader
+}
