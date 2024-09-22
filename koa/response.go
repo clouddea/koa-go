@@ -33,3 +33,7 @@ func (this *KoaResponse) Header() http.Header {
 func (this *KoaResponse) HasSentHeader() bool {
 	return this.hasSentHeader
 }
+
+func (this *KoaResponse) SetCookie(cookie *http.Cookie) {
+	http.SetCookie(this.context.Res, cookie)
+}

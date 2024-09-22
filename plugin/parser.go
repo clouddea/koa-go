@@ -5,6 +5,7 @@ import (
 	"github.com/clouddea/koa-go/koa"
 	"github.com/clouddea/koa-go/koa/util"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 )
@@ -15,10 +16,12 @@ func NewJsonParser(maxLenBytes int) koa.PluginMultiArg {
 		if context.Req.Header.Get("Content-Type") == "application/json" {
 			length, err := strconv.Atoi(context.Req.Header.Get("Content-Length"))
 			if err != nil {
+				log.Println("Invalid Content-Length")
 				context.Throw(http.StatusBadRequest)
 				return
 			}
 			if length > maxLenBytes {
+				log.Println("body too large")
 				context.Throw(http.StatusNotAcceptable)
 				return
 			}
@@ -30,6 +33,7 @@ func NewJsonParser(maxLenBytes int) koa.PluginMultiArg {
 				for size <= maxLenBytes {
 					readBytes, err := context.Request.Body.(io.ReadCloser).Read(buf)
 					if err != nil && err != io.EOF {
+						log.Println("error reading body", err)
 						context.Throw(http.StatusBadRequest)
 						return
 					}
@@ -41,6 +45,7 @@ func NewJsonParser(maxLenBytes int) koa.PluginMultiArg {
 				var body map[string]any = make(map[string]any)
 				err := json.Unmarshal(data, &body)
 				if err != nil {
+					log.Println("cannot unmarshal json", err)
 					context.Throw(http.StatusBadRequest)
 					return
 				}

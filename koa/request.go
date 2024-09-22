@@ -1,5 +1,6 @@
 package koa
 
 type KoaRequest struct {
-	Body any
+	context *Context
+	Body    any
 }

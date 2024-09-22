@@ -3,6 +3,9 @@ package plugin
 import (
 	"github.com/clouddea/koa-go/koa"
 	"log"
+	"log/slog"
+	"net/http"
+	"os"
 )
 
 /** 最简日志实现 */
@@ -11,19 +14,21 @@ func NewLogger(debug bool) koa.PluginMultiArg {
 		defer func() {
 			err := recover()
 			if err != nil {
-				context.Throw(500)
+				context.Throw(http.StatusInternalServerError)
 				log.Printf("[ERROR] %v", err)
 			}
 		}()
+		logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+		context.State["log"] = logger
 		if !debug {
 			next()
 			return
 		}
 		next()
-		log.Printf("[%v] [%v] %v %v",
-			context.Req.Method,
-			context.Response.GetStatus(),
-			context.Req.URL.Path,
-			context.Req.URL.RawQuery)
+		logger.Info("[ACCESS]",
+			"method", context.Req.Method,
+			"status", context.Response.GetStatus(),
+			"path", context.Req.URL.Path,
+			"query", context.Req.URL.RawQuery)
 	}
 }

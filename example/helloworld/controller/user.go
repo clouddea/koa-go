@@ -25,6 +25,32 @@ func User_Register_Controller(ctx *koa.Context) {
 	}
 }
 
+func User_Login_Controller(ctx *koa.Context) {
+	if input, ok := ctx.Request.Body.(map[string]any); ok {
+		if _, ok := input["name"]; !ok {
+			ctx.Response.Body = dao.ResponseError("请输入用户名")
+			return
+		}
+		var session = ctx.State["session"].(*plugin.Session)
+		if _, ok := session.Val["logined"]; ok {
+			ctx.Response.Body = dao.ResponseDataSuccess(map[string]any{
+				"name":    input["name"].(string),
+				"logined": session.Val["logined"],
+			})
+			return
+		}
+
+		ctx.Response.Body = dao.ResponseDataSuccess(map[string]any{
+			"name":    input["name"].(string),
+			"logined": false,
+		})
+		session.Val["logined"] = true
+
+	} else {
+		ctx.Response.Body = dao.ResponseError("请输入数据")
+	}
+}
+
 func User_Update_Controller(ctx *koa.Context) {
 	db := ctx.State["sqlite3"].(*sql.DB)
 	auth := ctx.State["auth"].(plugin.Auth)
@@ -42,5 +68,6 @@ func User_Update_Controller(ctx *koa.Context) {
 
 var UserController = map[string]koa.Plugin{
 	"/register":    koa.PluginSingleArg(User_Register_Controller),
+	"/login":       koa.PluginSingleArg(User_Login_Controller),
 	"/user/update": koa.PluginSingleArg(User_Update_Controller),
 }

@@ -85,7 +85,17 @@ func (this *Koa) dispatcher(writer http.ResponseWriter, req *http.Request) {
 		Request:  request,
 		Response: response,
 	}
+	// global error processing
+	defer func() {
+		if err := recover(); err != nil {
+			context.Throw(http.StatusInternalServerError)
+			log.Println("Internal Sever Error")
+			log.Printf("%v\n", err)
+		}
+	}()
+	// emit request
 	cookies.context = context
+	request.context = context
 	response.context = context
 	this.dispatcher_dfs(context, 0)
 	// write response
