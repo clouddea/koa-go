@@ -29,13 +29,13 @@ func NewSession(capacity int, maxAge int) koa.PluginMultiArg {
 			sessionId := cookie.Value
 			// log.Println(context.Req.URL.Path + "==>" + sessionId)
 			if sessionVal, ok := sessionStore.Get(sessionId); ok {
-				sessionStoreMutex.Lock()
+				sessionStoreMutex.Unlock()
 				context.State["session"] = sessionVal.(*Session)
 				next()
 				return
 			}
 		}
-		sessionStoreMutex.Lock()
+		sessionStoreMutex.Unlock()
 		// 生成新的Session
 		// UUID会重复吗？ https://blog.csdn.net/u012760435/article/details/122304214
 		// https://huanglianjing.com/posts/uuidgo%E9%80%9A%E7%94%A8%E5%94%AF%E4%B8%80%E6%A0%87%E8%AF%86%E7%AC%A6%E7%94%9F%E6%88%90/
