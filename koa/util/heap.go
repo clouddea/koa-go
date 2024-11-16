@@ -46,6 +46,10 @@ func (this *Heap[T]) Pop() T {
 	return heap.Pop(&this.heapData).(T)
 }
 
+func (this *Heap[T]) Peek() T {
+	return this.heapData.data[0]
+}
+
 func (this *Heap[T]) Init() {
 	heap.Init(&this.heapData)
 }
