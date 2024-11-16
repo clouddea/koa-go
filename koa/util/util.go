@@ -1,6 +1,8 @@
 package util
 
-import "fmt"
+import (
+	"fmt"
+)
 
 func Assert(err error, msg string) {
 	if err != nil {
