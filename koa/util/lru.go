@@ -33,6 +33,10 @@ func NewLRUCache[T comparable](capacity int) *LRUCache[T] {
 	return &l
 }
 
+func (this *LRUCache[T]) Size() int {
+	return this.size
+}
+
 func (this *LRUCache[T]) Get(key T) (any, bool) {
 	if _, ok := this.cache[key]; !ok {
 		return nil, false
@@ -58,6 +62,15 @@ func (this *LRUCache[T]) Put(key T, value any) {
 		node.value = value
 		this.moveToHead(node)
 	}
+}
+
+func (this *LRUCache[T]) Remove(key T) {
+	if _, ok := this.cache[key]; !ok {
+		return
+	}
+	this.removeNode(this.cache[key])
+	delete(this.cache, key)
+	this.size--
 }
 
 func (this *LRUCache[T]) addToHead(node *DLinkedNode[T]) {
