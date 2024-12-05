@@ -45,7 +45,9 @@ func NewProxy(mappings map[string][]string) koa.PluginMultiArg {
 		}
 		upstream = strings.ReplaceAll(upstream, "$path", path)
 		upstream = strings.ReplaceAll(upstream, "$extra", extraPath)
-		upstream += "?" + ctx.Req.URL.RawQuery
+		if ctx.Req.URL.RawQuery != "" {
+			upstream += "?" + ctx.Req.URL.RawQuery
+		}
 
 		rqst, err := http.NewRequest(ctx.Req.Method, upstream, ctx.Req.Body)
 		if err != nil {
