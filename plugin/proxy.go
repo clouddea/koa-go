@@ -73,18 +73,19 @@ func NewProxy(mappings map[string][]string) koa.PluginMultiArg {
 		for {
 			// 从文件中读取内容到缓冲区
 			bytesRead, err := rsps.Body.Read(buffer)
+			if bytesRead > 0 {
+				// 输出读取的内容到标准输出
+				err = ctx.Response.Write(buffer[:bytesRead])
+				if err != nil {
+					log.Println("Write response failed:", err)
+					return
+				}
+			}
 			if err != nil {
 				if err == io.EOF {
 					break // 文件已经读取完毕
 				}
 				log.Println("Read response failed:", err)
-				return
-			}
-
-			// 输出读取的内容到标准输出
-			err = ctx.Response.Write(buffer[:bytesRead])
-			if err != nil {
-				log.Println("Write response failed:", err)
 				return
 			}
 		}
