@@ -138,3 +138,24 @@ type FCGI_NameValuePair44 struct {
 	NameData    []byte
 	ValueData   []byte
 }
+
+// 自定义数据类型
+type FCGIResponseStdout struct {
+	FCGI_Header
+	data []byte
+}
+
+type FCGIResponseStderr struct {
+	FCGI_Header
+	data []byte
+}
+
+type FCGIResponseUnknown struct {
+	FCGI_Header
+	data FCGI_UnknownTypeBody
+}
+
+type FCGIResponseEndRequest struct {
+	FCGI_Header
+	data FCGI_EndRequestBody
+}

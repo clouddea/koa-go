@@ -8,9 +8,11 @@ import (
 	"github.com/clouddea/koa-go/koa/util"
 	"log"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // cgi: https://datatracker.ietf.org/doc/html/rfc3875
@@ -26,8 +28,16 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 	// do not need to close connection
 	// defer conn.Close()
 
-	requestId := uint16(250)
+	// states
+	requestId := uint16(1)
 	requestIdLock := sync.Mutex{}
+	requestReceiveBuffers := make(map[uint16]chan any)
+	requestReceiveBuffersLock := sync.RWMutex{}
+	startedReceiveResponse := false
+	startedReceiveResponseLock := sync.Mutex{}
+
+	// receive response unifiedly
+	//go receiveResponse(conn, requestReceiveBuffers)
 
 	return func(context *koa.Context, next func()) {
 		defer func() {
@@ -67,14 +77,9 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 		}
 
 		buf := &bytes.Buffer{}
-		err := binary.Write(buf, binary.BigEndian, request)
-		if err != nil {
-			log.Panicln("can not encode request", err)
-		}
+		util.Assert(binary.Write(buf, binary.BigEndian, request), "can not encode request")
 		_, err = conn.Write(buf.Bytes())
-		if err != nil {
-			log.Panicln("can not write request", err)
-		}
+		util.Assert(err, "can not write request")
 
 		//envs
 		contentType := context.Req.Header.Get("Content-Type")
@@ -121,30 +126,17 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 				Reserved:        0,
 			}
 			buf = &bytes.Buffer{}
-			err = binary.Write(buf, binary.BigEndian, paramHeader)
-			if err != nil {
-				log.Panicln("can not encode param item request", err)
-			}
+			util.Assert(binary.Write(buf, binary.BigEndian, paramHeader), "can not encode param item request")
 			_, err = conn.Write(buf.Bytes())
-			if err != nil {
-				log.Panicln("can not write  param item request", err)
-			}
+			util.Assert(err, "can not write  param item request")
 			_, err = conn.Write(util.AnyToBytes(envItem.NameLength))
-			if err != nil {
-				log.Panicln("can not write env item name length", err)
-			}
+			util.Assert(err, "can not write env item name length")
 			_, err = conn.Write(util.AnyToBytes(envItem.ValueLength))
-			if err != nil {
-				log.Panicln("can not write env item value length", err)
-			}
+			util.Assert(err, "can not write env item value length")
 			_, err = conn.Write(envItem.NameData)
-			if err != nil {
-				log.Panicln("can not write env item name data", err)
-			}
+			util.Assert(err, "can not write env item name data")
 			_, err = conn.Write(envItem.ValueData)
-			if err != nil {
-				log.Panicln("can not write env item value data", err)
-			}
+			util.Assert(err, "can not write env item value data")
 
 		}
 
@@ -189,58 +181,46 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 			log.Panicln("can not write request", err)
 		}
 
-		// receive response
-		var headerLine []byte = make([]byte, 0)
+		// receive own response
+		responseBuffer := make(chan any, 1)
+		requestReceiveBuffersLock.Lock()
+		requestReceiveBuffers[requestId] = responseBuffer
+		requestReceiveBuffersLock.Unlock()
+		defer func() {
+			requestReceiveBuffersLock.Lock()
+			delete(requestReceiveBuffers, requestId)
+			requestReceiveBuffersLock.Unlock()
+		}()
+
+		startedReceiveResponseLock.Lock()
+		if !startedReceiveResponse {
+			// receive response unifiedly
+			go receiveResponse(conn, requestReceiveBuffers)
+			startedReceiveResponse = true
+		}
+		startedReceiveResponseLock.Unlock()
+
+		var headerLine = make([]byte, 0)
 		var readHeaderFinish = false
 		var charNL = 0
 		var charCR = 0
+	loopReceiveResponseObject:
 		for true {
-			bufBytes := make([]byte, 8)
-			_, err = conn.Read(bufBytes)
-			if err != nil {
-				log.Panicln("can not read response", err)
-			}
-
-			buf = &bytes.Buffer{}
-			buf.Write(bufBytes)
-
-			resp := FCGI_Header{}
-			err = binary.Read(buf, binary.BigEndian, &resp)
-			if err != nil {
-				log.Panicln("can not parse response", err)
-			}
-			contentLength := int(resp.ContentLengthB1)*256 + int(resp.ContentLengthB0)
-			paddingLength := resp.PaddingLength
-			contentBytes := make([]byte, contentLength)
-			if contentLength != 0 {
-				// read content
-				_, err = conn.Read(contentBytes)
-				if err != nil {
-					log.Panicln("can not read response content", err)
-				}
-			}
-
-			buf = &bytes.Buffer{}
-			buf.Write(bufBytes)
-
-			if resp.Type == FCGI_STDOUT || resp.Type == FCGI_STDERR {
-
-				if readHeaderFinish {
-					err := context.Response.Write(contentBytes)
-					if err != nil {
-						log.Panicln("can not write content to resp ", err)
+			select {
+			case result := <-responseBuffer:
+				if stdout, ok := result.(FCGIResponseStdout); ok {
+					if readHeaderFinish {
+						util.Assert(context.Response.Write(stdout.data), "can not write content to resp")
+						continue
 					}
-				} else {
-					for _, b := range contentBytes {
+					for _, b := range stdout.data {
 						if readHeaderFinish {
-							err := context.Response.Write([]byte{b})
-							if err != nil {
-								log.Panicln("can not write content to resp ", err)
-							}
+							util.Assert(context.Response.Write([]byte{b}), "can not write content to resp")
 						} else {
 							if b == '\r' {
 								charCR += 1
 								headerLineString := string(headerLine)
+								headerLine = make([]byte, 0)
 								headerLineKeyValue := strings.SplitN(headerLineString, ":", 2)
 								if len(headerLineKeyValue) != 2 {
 									continue
@@ -249,7 +229,6 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 									strings.TrimSpace(headerLineKeyValue[0]),
 									strings.TrimSpace(headerLineKeyValue[1]),
 								)
-								headerLine = make([]byte, 0)
 							} else if b == '\n' {
 								charNL += 1
 							} else {
@@ -264,31 +243,69 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 
 					}
 				}
-			} else if resp.Type == FCGI_UNKNOWN_TYPE {
-				unkonwBody := FCGI_UnknownTypeBody{}
-				err = binary.Read(buf, binary.BigEndian, &unkonwBody)
-				if err != nil {
-					log.Panicln("can not parse unknow body", err)
+				if stderr, ok := result.(FCGIResponseStderr); ok {
+					_, err = os.Stderr.Write(stderr.data)
+					util.Assert(err, "unnable to write os stderr")
 				}
-			} else if resp.Type == FCGI_END_REQUEST {
-				endRequest := FCGI_EndRequestBody{}
-				err = binary.Read(buf, binary.BigEndian, &endRequest)
-				if err != nil {
-					log.Panicln("can not parse end response", err)
+				if _, ok := result.(FCGIResponseEndRequest); ok {
+					log.Print("end of fascgi request: ",
+						requestId)
+					break loopReceiveResponseObject
 				}
-				log.Print("end of fascgi request: ",
-					(int(resp.RequestIdB1)<<8)|int(resp.RequestIdB0),
-					endRequest.ProtocolStatus)
-				break
+				if _, ok := result.(FCGIResponseUnknown); ok {
+					continue
+				}
+			case <-time.After(30 * time.Second):
+				panic("read response from fastcgi timeout: requestid: " + fmt.Sprintf("%v", requestId))
 			}
-			// read padding
-			if paddingLength != 0 {
-				paddingBytes := make([]byte, paddingLength)
-				_, err := conn.Read(paddingBytes)
-				if err != nil {
-					log.Panicln("can not read padding bytes", err)
-				}
-			}
+		}
+	}
+}
+
+func receiveResponse(conn net.Conn, bufs map[uint16]chan any) {
+
+	// receive response
+	var buf = &bytes.Buffer{}
+	for true {
+		//read fci header
+		bufBytes := make([]byte, 8)
+		_, err := conn.Read(bufBytes)
+		util.Assert(err, "can not read response")
+		buf = &bytes.Buffer{}
+		buf.Write(bufBytes)
+		resp := FCGI_Header{}
+		util.Assert(binary.Read(buf, binary.BigEndian, &resp), "can not parse response")
+
+		requestId := uint16(resp.RequestIdB1)*256 + uint16(resp.RequestIdB0)
+		contentLength := uint16(resp.ContentLengthB1)*256 + uint16(resp.ContentLengthB0)
+		paddingLength := resp.PaddingLength
+		contentBytes := make([]byte, contentLength)
+
+		// read fcgi content
+		if contentLength != 0 {
+			_, err = conn.Read(contentBytes)
+			util.Assert(err, "can not read response content")
+			buf = &bytes.Buffer{}
+			buf.Write(contentBytes)
+		}
+		if resp.Type == FCGI_STDOUT {
+			bufs[requestId] <- FCGIResponseStdout{resp, contentBytes}
+		} else if resp.Type == FCGI_STDERR {
+			bufs[requestId] <- FCGIResponseStderr{resp, contentBytes}
+		} else if resp.Type == FCGI_UNKNOWN_TYPE {
+			unkonwBody := FCGI_UnknownTypeBody{}
+			util.Assert(binary.Read(buf, binary.BigEndian, &unkonwBody), "can not parse unknown type body")
+			bufs[requestId] <- FCGIResponseUnknown{resp, unkonwBody}
+		} else if resp.Type == FCGI_END_REQUEST {
+			endRequest := FCGI_EndRequestBody{}
+			util.Assert(binary.Read(buf, binary.BigEndian, &endRequest), "can not parse end response")
+			bufs[requestId] <- FCGIResponseEndRequest{resp, endRequest}
+		}
+		// read padding
+		if paddingLength != 0 {
+			paddingBytes := make([]byte, paddingLength)
+			_, err := conn.Read(paddingBytes)
+			util.Assert(err, "can not read padding bytes")
 		}
 	}
 }
