@@ -51,7 +51,7 @@ func NewStatic(prefix string, dir string) koa.PluginSingleArg {
 			return
 		}
 		file, err := os.Open(filepath)
-		util.Assert(err, "open file error"+filepath)
+		util.Assert(err, "open file error: "+filepath)
 		defer file.Close()
 		// 文件简单名
 		_, filename := path.Split(filepath)

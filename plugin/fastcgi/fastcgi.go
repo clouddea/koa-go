@@ -40,6 +40,12 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 	//go receiveResponse(conn, requestReceiveBuffers)
 
 	return func(context *koa.Context, next func()) {
+
+		if !strings.HasSuffix(context.Req.URL.Path, ".php") {
+			next()
+			return
+		}
+
 		defer func() {
 			if err := recover(); err != nil {
 				panic(err)
@@ -56,6 +62,8 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 		requestIdLock.Unlock()
 		requestIdB1 := uint8(requestId >> 8 & 0xFF)
 		requestIdB0 := uint8(requestId >> 0 & 0xFF)
+
+		fmt.Printf("requestId: %d start: path=%v, query=%v \n", requestId, cuttedPath, context.Req.URL.RawQuery)
 
 		request := FCGI_BeginRequestRecord{
 			Header: FCGI_Header{
@@ -130,15 +138,15 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 			buf = &bytes.Buffer{}
 			util.Assert(binary.Write(buf, binary.BigEndian, paramHeader), "can not encode param item request")
 			_, err = conn.Write(buf.Bytes())
-			util.Assert(err, "can not write  param item request")
+			util.Assert(err, fmt.Sprintf("can not write param item request"))
 			_, err = conn.Write(util.AnyToBytes(envItem.NameLength))
-			util.Assert(err, "can not write env item name length")
+			util.Assert(err, fmt.Sprintf("can not write env item name length: %v", envKey))
 			_, err = conn.Write(util.AnyToBytes(envItem.ValueLength))
-			util.Assert(err, "can not write env item value length")
+			util.Assert(err, fmt.Sprintf("can not write env item value length: %v", envValue))
 			_, err = conn.Write(envItem.NameData)
-			util.Assert(err, "can not write env item name data")
+			util.Assert(err, fmt.Sprintf("can not write env item name data: %v", envKey))
 			_, err = conn.Write(envItem.ValueData)
-			util.Assert(err, "can not write env item value data")
+			util.Assert(err, fmt.Sprintf("can not write env item value data: %v", envValue))
 
 		}
 
@@ -300,6 +308,7 @@ func receiveResponse(conn net.Conn, bufs map[uint16]chan any) {
 			bufs[requestId] <- FCGIResponseUnknown{resp, unkonwBody}
 		} else if resp.Type == FCGI_END_REQUEST {
 			endRequest := FCGI_EndRequestBody{}
+			fmt.Printf("get end of id : %v \n", (requestId))
 			util.Assert(binary.Read(buf, binary.BigEndian, &endRequest), "can not parse end response")
 			bufs[requestId] <- FCGIResponseEndRequest{resp, endRequest}
 		}

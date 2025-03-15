@@ -6,7 +6,6 @@ import (
 	"github.com/clouddea/koa-go/example/helloworld/dao"
 	"github.com/clouddea/koa-go/koa"
 	"github.com/clouddea/koa-go/plugin"
-	"github.com/clouddea/koa-go/plugin/fastcgi"
 )
 
 var TestController = map[string]koa.Plugin{
@@ -20,6 +19,5 @@ var TestController = map[string]koa.Plugin{
 		context.Assert(dao.Test_DAO_Add(context.State["sqlite3"].(*sql.DB)) == nil, 500)
 		_ = context.Response.Write([]byte("add success"))
 	}),
-	"/test/fastcgi": fastcgi.NewFastCGI("/test/fastcgi", "/var/www/html", "127.0.0.1", 9000),
-	"/":             plugin.NewStatic("/", "./www"),
+	"/": plugin.NewStatic("/", "./www/kodbox.1.57"),
 }

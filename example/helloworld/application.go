@@ -6,6 +6,7 @@ import (
 	"github.com/clouddea/koa-go/example/helloworld/dao"
 	"github.com/clouddea/koa-go/koa"
 	"github.com/clouddea/koa-go/plugin"
+	"github.com/clouddea/koa-go/plugin/fastcgi"
 	"log"
 	"maps"
 )
@@ -30,6 +31,7 @@ func main() {
 	app.Use(logger)
 	app.Use(session)
 	app.Use(plugin.NewProxy(config.Proxys))
+	app.Use(fastcgi.NewFastCGI("", "/var/www/html", "127.0.0.1", 9000))
 	app.Use(router)
 	log.Printf("server %v has started on port %v \n", cfg.Server.Name, cfg.Server.Port)
 	app.Listen(cfg.Server.Port)
