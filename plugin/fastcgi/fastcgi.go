@@ -100,6 +100,8 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 			"GATEWAY_INTERFACE": "CGI/1.1",
 			"CONTENT_TYPE":      contentType,
 			"CONTENT_LENGTH":    fmt.Sprintf("%d", context.Req.ContentLength),
+			"SERVER_NAME":       "localhost",
+			"SERVER_PORT":       "8080",
 		}
 
 		for envKey, envValue := range envs {
