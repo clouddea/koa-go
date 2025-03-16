@@ -42,7 +42,12 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 
 	return func(context *koa.Context, next func()) {
 
-		if !strings.HasSuffix(context.Req.URL.Path, ".php") {
+		cuttedPath, ok := strings.CutPrefix(context.Req.URL.Path, prefix)
+		if !ok {
+			panic("invalid path for prefix: " + prefix)
+		}
+
+		if strings.Contains(cuttedPath, ".") && !strings.HasSuffix(cuttedPath, ".php") {
 			// 读取文件
 			next()
 			return
@@ -54,16 +59,23 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 			}
 		}()
 
-		cuttedPath, ok := strings.CutPrefix(context.Req.URL.Path, prefix)
-		if !ok {
-			panic("invalid path for prefix: " + prefix)
-		}
-
 		requestIdLock.Lock()
 		requestId += 1
-		requestIdLock.Unlock()
 		requestIdB1 := uint8(requestId >> 8 & 0xFF)
 		requestIdB0 := uint8(requestId >> 0 & 0xFF)
+		requestIdCurr := requestId
+		requestIdLock.Unlock()
+
+		// 在请求之前先建立channel
+		responseBuffer := make(chan any, 1)
+		requestReceiveBuffers.Store(requestIdCurr, responseBuffer)
+		fmt.Printf("requestId: %v add channel\n", requestIdCurr)
+		defer func() {
+			requestReceiveBuffers.Delete(requestIdCurr)
+			fmt.Printf("requestId: %v remove channel\n", requestIdCurr)
+		}()
+
+		// 开始发起请求
 
 		request := FCGI_BeginRequestRecord{
 			Header: FCGI_Header{
@@ -95,22 +107,36 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 			contentType = "text/html; charset=utf-8"
 		}
 
+		scriptFileName := cuttedPath
+		if !strings.HasSuffix(scriptFileName, ".php") {
+			scriptFileName += "/index.php"
+		}
+
 		envs := map[string]string{
-			"SCRIPT_FILENAME":   documentRoot + cuttedPath, // have no influence to php
-			"REQUEST_METHOD":    "GET",
+			"SCRIPT_FILENAME":   documentRoot + scriptFileName, // have no influence to php
+			"REQUEST_METHOD":    context.Req.Method,
 			"PATH_INFO":         context.Req.URL.Path, // will automately be replaced by extra path after php file
 			"QUERY_STRING":      context.Req.URL.RawQuery,
 			"DOCUMENT_ROOT":     documentRoot,
 			"DOCUMENT_URI":      cuttedPath, // will add extra path after php file automately
 			"REQUEST_URI":       cuttedPath, // will add extra path after php file automately
 			"SCRIPT_NAME":       cuttedPath,
-			"SERVER_PROTOCOL":   "HTTP/1.1",
+			"SERVER_PROTOCOL":   context.Req.Proto, // "HTTP/1.1"
 			"GATEWAY_INTERFACE": "CGI/1.1",
 			"CONTENT_TYPE":      contentType,
 			"CONTENT_LENGTH":    fmt.Sprintf("%d", context.Req.ContentLength),
 			"SERVER_NAME":       "localhost",
 			"SERVER_PORT":       "8080",
-			"HTTP_HOST":         "localhost:8080", // for wordpress, dont kow how to set
+			"HTTP_HOST":         context.Req.Host, // for wordpress, dont kow how to set, from header: Host
+		}
+
+		// add request header
+		// 暂时只支持1个同KEY
+		for k, vs := range context.Req.Header {
+			envKey := "HTTP_" + strings.ToUpper(strings.ReplaceAll(k, "-", "_"))
+			envValue := vs[0]
+			envs[envKey] = envValue
+			//fmt.Printf("%v=%v\n", envKey, envValue)
 		}
 
 		for envKey, envValue := range envs {
@@ -169,27 +195,31 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 		for true {
 			readBuffer := make([]byte, 1024)
 			readBytesCount, err := context.Req.Body.Read(readBuffer)
+			if readBytesCount != 0 {
+				inputHeader := FCGI_Header{
+					Version:         FCGI_VERSION_1,
+					Type:            FCGI_STDIN,
+					RequestIdB1:     requestIdB1,
+					RequestIdB0:     requestIdB0,
+					ContentLengthB1: uint8(readBytesCount >> 8 & 0xff),
+					ContentLengthB0: uint8(readBytesCount & 0xff),
+					PaddingLength:   0,
+					Reserved:        0,
+				}
+
+				buf = &bytes.Buffer{}
+				util.Assert(binary.Write(buf, binary.BigEndian, inputHeader), "can not encode request")
+				_, err = conn.Write(buf.Bytes())
+				util.Assert(err, "can not write request")
+				_, err = conn.Write(readBuffer[:readBytesCount])
+				util.Assert(err, "can not write request data")
+				fmt.Printf("requestId: %v sent a request input frame. content length=%v \n", requestIdCurr, readBytesCount)
+			}
 			if err == io.EOF {
 				break
+			} else {
+				util.Assert(err, "can not read request body")
 			}
-			util.Assert(err, "can not read request body")
-			inputHeader := FCGI_Header{
-				Version:         FCGI_VERSION_1,
-				Type:            FCGI_STDIN,
-				RequestIdB1:     requestIdB1,
-				RequestIdB0:     requestIdB0,
-				ContentLengthB1: uint8(readBytesCount >> 8 & 0xff),
-				ContentLengthB0: uint8(readBytesCount & 0xff),
-				PaddingLength:   0,
-				Reserved:        0,
-			}
-
-			buf = &bytes.Buffer{}
-			util.Assert(binary.Write(buf, binary.BigEndian, inputHeader), "can not encode request")
-			_, err = conn.Write(buf.Bytes())
-			util.Assert(err, "can not write request")
-			_, err = conn.Write(readBuffer[:readBytesCount])
-			util.Assert(err, "can not write request data")
 		}
 
 		inputEnd := FCGI_Header{
@@ -209,15 +239,9 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 		util.Assert(err, "can not write request")
 
 		fmt.Printf("requestId: %d start: path=%v, query=%v, content length=%v \n",
-			requestId, cuttedPath, context.Req.URL.RawQuery, context.Req.ContentLength)
+			requestIdCurr, cuttedPath, context.Req.URL.RawQuery, context.Req.ContentLength)
 
 		// receive own response
-		responseBuffer := make(chan any, 1)
-		requestReceiveBuffers.Store(requestId, responseBuffer)
-		defer func() {
-			requestReceiveBuffers.Delete(requestId)
-		}()
-
 		startedReceiveResponseLock.Lock()
 		if !startedReceiveResponse {
 			// receive response unifiedly
@@ -285,15 +309,15 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 				}
 				if _, ok := result.(FCGIResponseEndRequest); ok {
 					log.Printf("end of fascgi request: %v, received request id = %v",
-						requestId,
+						requestIdCurr,
 						(uint16(result.(FCGIResponseEndRequest).RequestIdB1)<<8)+uint16(result.(FCGIResponseEndRequest).RequestIdB0))
 					break loopReceiveResponseObject
 				}
 				if _, ok := result.(FCGIResponseUnknown); ok {
 					continue
 				}
-			case <-time.After(30 * time.Second):
-				panic("read response from fastcgi timeout: requestid: " + fmt.Sprintf("%v", requestId))
+			case <-time.After(300 * time.Second):
+				panic("read response from fastcgi timeout: requestid: " + fmt.Sprintf("%v", requestIdCurr))
 			}
 		}
 	}
@@ -334,7 +358,10 @@ func receiveResponse(conn net.Conn, bufs *sync.Map) {
 			//fmt.Printf("requestId: %d frame read length: %v\n",
 			//	requestId, contentReadBytesLength)
 		}
-		responseChannel, _ := bufs.Load(requestId)
+		responseChannel, ok := bufs.Load(requestId)
+		if !ok {
+			panic(fmt.Sprintf("can not find response channel for request: %v", requestId))
+		}
 		var responseChannelTyped = responseChannel.(chan any)
 		if resp.Type == FCGI_STDOUT {
 			responseChannelTyped <- FCGIResponseStdout{resp, buf.Bytes()}
