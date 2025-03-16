@@ -32,8 +32,8 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 	// states
 	requestId := uint16(1)
 	requestIdLock := sync.Mutex{}
-	requestReceiveBuffers := make(map[uint16]chan any)
-	requestReceiveBuffersLock := sync.Mutex{}
+	requestReceiveBuffers := sync.Map{}
+
 	startedReceiveResponse := false
 	startedReceiveResponseLock := sync.Mutex{}
 
@@ -211,19 +211,15 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 
 		// receive own response
 		responseBuffer := make(chan any, 1)
-		requestReceiveBuffersLock.Lock()
-		requestReceiveBuffers[requestId] = responseBuffer
-		requestReceiveBuffersLock.Unlock()
+		requestReceiveBuffers.Store(requestId, responseBuffer)
 		defer func() {
-			requestReceiveBuffersLock.Lock()
-			delete(requestReceiveBuffers, requestId)
-			requestReceiveBuffersLock.Unlock()
+			requestReceiveBuffers.Delete(requestId)
 		}()
 
 		startedReceiveResponseLock.Lock()
 		if !startedReceiveResponse {
 			// receive response unifiedly
-			go receiveResponse(conn, requestReceiveBuffers, &requestReceiveBuffersLock)
+			go receiveResponse(conn, &requestReceiveBuffers)
 			startedReceiveResponse = true
 		}
 		startedReceiveResponseLock.Unlock()
@@ -291,7 +287,7 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 	}
 }
 
-func receiveResponse(conn net.Conn, bufs map[uint16]chan any, bufsLock *sync.Mutex) {
+func receiveResponse(conn net.Conn, bufs *sync.Map) {
 
 	// receive response
 	var buf = &bytes.Buffer{}
@@ -326,22 +322,22 @@ func receiveResponse(conn net.Conn, bufs map[uint16]chan any, bufsLock *sync.Mut
 			//fmt.Printf("requestId: %d frame read length: %v\n",
 			//	requestId, contentReadBytesLength)
 		}
-		bufsLock.Lock()
+		responseChannel, _ := bufs.Load(requestId)
+		var responseChannelTyped = responseChannel.(chan any)
 		if resp.Type == FCGI_STDOUT {
-			bufs[requestId] <- FCGIResponseStdout{resp, buf.Bytes()}
+			responseChannelTyped <- FCGIResponseStdout{resp, buf.Bytes()}
 		} else if resp.Type == FCGI_STDERR {
-			bufs[requestId] <- FCGIResponseStderr{resp, buf.Bytes()}
+			responseChannelTyped <- FCGIResponseStderr{resp, buf.Bytes()}
 		} else if resp.Type == FCGI_UNKNOWN_TYPE {
 			unkonwBody := FCGI_UnknownTypeBody{}
 			util.Assert(binary.Read(buf, binary.BigEndian, &unkonwBody), "can not parse unknown type body")
-			bufs[requestId] <- FCGIResponseUnknown{resp, unkonwBody}
+			responseChannelTyped <- FCGIResponseUnknown{resp, unkonwBody}
 		} else if resp.Type == FCGI_END_REQUEST {
 			endRequest := FCGI_EndRequestBody{}
 			fmt.Printf("get end of id : %v \n", (requestId))
 			util.Assert(binary.Read(buf, binary.BigEndian, &endRequest), "can not parse end response")
-			bufs[requestId] <- FCGIResponseEndRequest{resp, endRequest}
+			responseChannelTyped <- FCGIResponseEndRequest{resp, endRequest}
 		}
-		bufsLock.Unlock()
 		// read padding
 		if paddingLength != 0 {
 			paddingBytes := make([]byte, paddingLength)
