@@ -43,6 +43,7 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 	return func(context *koa.Context, next func()) {
 
 		if !strings.HasSuffix(context.Req.URL.Path, ".php") {
+			// 读取文件
 			next()
 			return
 		}
@@ -109,6 +110,7 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 			"CONTENT_LENGTH":    fmt.Sprintf("%d", context.Req.ContentLength),
 			"SERVER_NAME":       "localhost",
 			"SERVER_PORT":       "8080",
+			"HTTP_HOST":         "localhost:8080", // for wordpress, dont kow how to set
 		}
 
 		for envKey, envValue := range envs {
@@ -228,6 +230,7 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 		var readHeaderFinish = false
 		var charNL = 0
 		var charCR = 0
+		var headers = make(map[string]string)
 	loopReceiveResponseObject:
 		for true {
 			select {
@@ -249,10 +252,16 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 								if len(headerLineKeyValue) != 2 {
 									continue
 								}
-								context.Response.Header().Set(
-									strings.TrimSpace(headerLineKeyValue[0]),
-									strings.TrimSpace(headerLineKeyValue[1]),
-								)
+								headerLineKey := strings.TrimSpace(headerLineKeyValue[0])
+								headerLineValue := strings.TrimSpace(headerLineKeyValue[1])
+								headers[headerLineKey] = headerLineValue
+								// set status
+								if headerLineKey == "Status" {
+									statusAndItsMessage := strings.SplitN(headerLineValue, " ", 2)
+									statusCode, err := strconv.Atoi(statusAndItsMessage[0])
+									util.Assert(err, "can not parse status code")
+									context.Response.SetStatus(statusCode)
+								}
 							} else if b == '\n' {
 								charNL += 1
 							} else {
@@ -262,6 +271,9 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 							}
 							if charCR == 2 && charNL == 2 {
 								readHeaderFinish = true
+								for k, v := range headers {
+									context.Response.Header().Set(k, v)
+								}
 							}
 						}
 
