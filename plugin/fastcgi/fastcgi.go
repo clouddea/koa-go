@@ -34,6 +34,8 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 	requestIdLock := sync.Mutex{}
 	requestReceiveBuffers := sync.Map{}
 
+	sendRequestLock := sync.Mutex{}
+
 	startedReceiveResponse := false
 	startedReceiveResponseLock := sync.Mutex{}
 
@@ -98,8 +100,7 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 
 		buf := &bytes.Buffer{}
 		util.Assert(binary.Write(buf, binary.BigEndian, request), "can not encode request")
-		_, err = conn.Write(buf.Bytes())
-		util.Assert(err, "can not write request")
+		util.Assert(sendRequest(conn, buf.Bytes(), &sendRequestLock), "can not write request")
 
 		//envs
 		contentType := context.Req.Header.Get("Content-Type")
@@ -168,8 +169,7 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 			buf.Write(util.AnyToBytes(envItem.ValueLength))
 			buf.Write(envItem.NameData)
 			buf.Write(envItem.ValueData)
-			_, err = conn.Write(buf.Bytes())
-			util.Assert(err, fmt.Sprintf("can not write param item request"))
+			util.Assert(sendRequest(conn, buf.Bytes(), &sendRequestLock), "can not write param item request")
 
 		}
 
@@ -185,8 +185,7 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 		}
 		buf = &bytes.Buffer{}
 		util.Assert(binary.Write(buf, binary.BigEndian, paramEnd), "can not encode request")
-		_, err = conn.Write(buf.Bytes())
-		util.Assert(err, "can not write request")
+		util.Assert(sendRequest(conn, buf.Bytes(), &sendRequestLock), "can not write request")
 
 		for true {
 			readBuffer := make([]byte, 1024)
@@ -205,10 +204,8 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 
 				buf = &bytes.Buffer{}
 				util.Assert(binary.Write(buf, binary.BigEndian, inputHeader), "can not encode request")
-				_, err = conn.Write(buf.Bytes())
-				util.Assert(err, "can not write request")
-				_, err = conn.Write(readBuffer[:readBytesCount])
-				util.Assert(err, "can not write request data")
+				buf.Write(readBuffer[:readBytesCount])
+				util.Assert(sendRequest(conn, buf.Bytes(), &sendRequestLock), "can not write request")
 				fmt.Printf("requestId: %v sent a request input frame. content length=%v \n", requestIdCurr, readBytesCount)
 			}
 			if err == io.EOF {
@@ -231,9 +228,7 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 
 		buf = &bytes.Buffer{}
 		util.Assert(binary.Write(buf, binary.BigEndian, inputEnd), "can not encode request")
-		_, err = conn.Write(buf.Bytes())
-		util.Assert(err, "can not write request")
-
+		util.Assert(sendRequest(conn, buf.Bytes(), &sendRequestLock), "can not write request")
 		fmt.Printf("requestId: %d start: path=%v, query=%v, content length=%v \n",
 			requestIdCurr, cuttedPath, context.Req.URL.RawQuery, context.Req.ContentLength)
 
@@ -317,6 +312,13 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 			}
 		}
 	}
+}
+
+func sendRequest(conn net.Conn, data []byte, lock *sync.Mutex) error {
+	lock.Lock()
+	defer lock.Unlock()
+	_, err := conn.Write(data) // TODO: judge length
+	return err
 }
 
 func receiveResponse(conn net.Conn, bufs *sync.Map) {
