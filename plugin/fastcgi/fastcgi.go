@@ -164,16 +164,12 @@ func NewFastCGI(prefix string, documentRoot string, host string, port int) koa.P
 			}
 			buf = &bytes.Buffer{}
 			util.Assert(binary.Write(buf, binary.BigEndian, paramHeader), "can not encode param item request")
+			buf.Write(util.AnyToBytes(envItem.NameLength))
+			buf.Write(util.AnyToBytes(envItem.ValueLength))
+			buf.Write(envItem.NameData)
+			buf.Write(envItem.ValueData)
 			_, err = conn.Write(buf.Bytes())
 			util.Assert(err, fmt.Sprintf("can not write param item request"))
-			_, err = conn.Write(util.AnyToBytes(envItem.NameLength))
-			util.Assert(err, fmt.Sprintf("can not write env item name length: %v", envKey))
-			_, err = conn.Write(util.AnyToBytes(envItem.ValueLength))
-			util.Assert(err, fmt.Sprintf("can not write env item value length: %v", envValue))
-			_, err = conn.Write(envItem.NameData)
-			util.Assert(err, fmt.Sprintf("can not write env item name data: %v", envKey))
-			_, err = conn.Write(envItem.ValueData)
-			util.Assert(err, fmt.Sprintf("can not write env item value data: %v", envValue))
 
 		}
 
